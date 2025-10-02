@@ -1,0 +1,10 @@
+{
+    "name": "CleanTabs",
+    "description": "Finds duplicate tabs across all windows and lets you consolidate or close them.",
+    "version": "1.0.0",
+    "manifest_version": 3,
+    "permissions": ["tabs", "tabGroups", "windows", "storage"],
+    "host_permissions": ["<all_urls>"],
+    "action": { "default_popup": "popup.html", "default_title": "Deduplicate Tabs" }
+  }
+  
