@@ -28,8 +28,12 @@ async function loadPreferences() {
 async function applyPreferences(preferences) {
   // Apply match mode
   const modeSelect = document.getElementById('mode');
+  const matchModeSelect = document.getElementById('matchModeSelect');
   if (modeSelect && preferences.matchMode) {
     modeSelect.value = preferences.matchMode;
+  }
+  if (matchModeSelect && preferences.matchMode) {
+    matchModeSelect.value = preferences.matchMode;
   }
   
   // Apply view mode
@@ -41,11 +45,24 @@ async function applyPreferences(preferences) {
   // Apply window overview expanded state
   const windowOverviewSection = document.getElementById('windowOverviewSection');
   if (windowOverviewSection && preferences.windowOverviewExpanded !== undefined) {
+    // Temporarily disable transition for initial state application
+    const windowOverviewContent = windowOverviewSection.querySelector('.window-overview-content');
+    if (windowOverviewContent) {
+      windowOverviewContent.style.transition = 'none';
+    }
+    
     if (preferences.windowOverviewExpanded) {
       windowOverviewSection.classList.add('expanded');
     } else {
       windowOverviewSection.classList.remove('expanded');
     }
+    
+    // Re-enable transition after a short delay
+    setTimeout(() => {
+      if (windowOverviewContent) {
+        windowOverviewContent.style.transition = '';
+      }
+    }, 50);
   }
 }
 
@@ -148,13 +165,10 @@ function render(groups, viewMode = 'duplicates') {
     const topRow = document.createElement('div');
     topRow.className = 'group-header-top-row';
     
-    const groupUrl = document.createElement('div');
-    groupUrl.className = 'group-url';
-    const example = tabs[0];
-    
     // Create favicon element
     const favicon = document.createElement('div');
     favicon.className = 'favicon';
+    const example = tabs[0];
     
     const faviconUrl = getFaviconUrl(example.url);
     if (faviconUrl) {
@@ -180,33 +194,27 @@ function render(groups, viewMode = 'duplicates') {
     }
     
     // Create URL text element - show the canonical key (match mode representation)
-    const urlText = document.createElement('span');
-    urlText.className = 'url-text';
+    const groupUrl = document.createElement('div');
+    groupUrl.className = 'group-url';
     const matchMode = document.getElementById('mode').value;
     const canonicalUrl = canonicalKey(example.url, matchMode);
-    urlText.textContent = truncateUrl(canonicalUrl) || '(chrome-internal)';
+    groupUrl.textContent = truncateUrl(canonicalUrl) || '(chrome-internal)';
     
-    groupUrl.appendChild(favicon);
-    groupUrl.appendChild(urlText);
-    
+    topRow.appendChild(favicon);
     topRow.appendChild(groupUrl);
     
     // Bottom row: Tab count and action buttons
     const bottomRow = document.createElement('div');
     bottomRow.className = 'group-header-bottom-row';
     
-    const groupMeta = document.createElement('div');
-    groupMeta.className = 'group-meta';
-    
+    // Create count badge
     const groupCount = document.createElement('span');
     groupCount.className = 'group-count';
     groupCount.textContent = tabs.length;
     
-    groupMeta.appendChild(groupCount);
-    
     // Create action buttons for the header
     const headerActions = document.createElement('div');
-    headerActions.className = 'group-header-actions';
+    headerActions.className = 'group-header-actions btn-group';
     
     const switchToFirst = document.createElement('button');
     switchToFirst.className = 'btn header-action-btn';
@@ -220,7 +228,7 @@ function render(groups, viewMode = 'duplicates') {
     
     const closeAllButOne = document.createElement('button');
     closeAllButOne.className = 'btn primary header-action-btn';
-    closeAllButOne.textContent = 'Keep first, close rest';
+    closeAllButOne.textContent = 'Keep first, close...';
     closeAllButOne.onclick = async (e) => {
       e.stopPropagation(); // Prevent group toggle
       const survivors = tabs[0].id;
@@ -255,7 +263,7 @@ function render(groups, viewMode = 'duplicates') {
 
     headerActions.append(switchToFirst, closeAllButOne, consolidateToCurrent, closeAll);
     
-    bottomRow.appendChild(groupMeta);
+    bottomRow.appendChild(groupCount);
     bottomRow.appendChild(headerActions);
     
     const collapseIcon = document.createElement('div');
@@ -291,7 +299,6 @@ function render(groups, viewMode = 'duplicates') {
       const tabMeta = document.createElement('div');
       tabMeta.className = 'tab-meta';
       tabMeta.innerHTML = `
-        <span>Window ${t.windowId}, Tab ${t.id}</span>
         ${t.discarded ? '<span class="tab-status discarded">Discarded</span>' : ''}
       `;
       
@@ -300,26 +307,18 @@ function render(groups, viewMode = 'duplicates') {
       tabInfo.appendChild(tabMeta);
 
       const tabActions = document.createElement('div');
-      tabActions.className = 'tab-actions';
+      tabActions.className = 'tab-actions btn-group';
 
       const jump = document.createElement('button');
-      jump.className = 'btn primary';
+      jump.className = 'btn';
       jump.textContent = 'Switch';
       jump.onclick = () => {
         chrome.windows.update(t.windowId, { focused: true });
         chrome.tabs.update(t.id, { active: true });
       };
 
-      const closeBtn = document.createElement('button');
-      closeBtn.className = 'btn';
-      closeBtn.textContent = 'Close';
-      closeBtn.onclick = async () => {
-        await chrome.tabs.remove(t.id);
-        refresh();
-      };
-
       const keepOnlyThis = document.createElement('button');
-      keepOnlyThis.className = 'btn';
+      keepOnlyThis.className = 'btn primary';
       keepOnlyThis.textContent = 'Keep only this';
       keepOnlyThis.onclick = async () => {
         const others = tabs.filter(x => x.id !== t.id).map(x => x.id);
@@ -338,7 +337,15 @@ function render(groups, viewMode = 'duplicates') {
         refresh();
       };
 
-      tabActions.append(jump, closeBtn, keepOnlyThis, consolidateHere);
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'btn danger';
+      closeBtn.textContent = 'Close';
+      closeBtn.onclick = async () => {
+        await chrome.tabs.remove(t.id);
+        refresh();
+      };
+
+      tabActions.append(jump, keepOnlyThis, consolidateHere, closeBtn);
       tabItem.append(tabInfo, tabActions);
       groupContent.appendChild(tabItem);
     }
@@ -660,7 +667,11 @@ function hideWindowPopup() {
 // Render window overview
 function renderWindowOverview(windows) {
   const windowGrid = document.getElementById('windowGrid');
+  const windowCountBadge = document.getElementById('windowCountBadge');
   windowGrid.innerHTML = '';
+  
+  // Update window count badge
+  windowCountBadge.textContent = windows.length;
   
   if (windows.length === 0) {
     windowGrid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: #64748b; padding: 20px;">No windows found</div>';
@@ -796,6 +807,12 @@ async function refresh() {
   try {
     const mode = document.getElementById('mode').value;
     const viewMode = document.getElementById('viewMode').value;
+    
+    // Sync the visible match mode selector with the hidden one
+    const matchModeSelect = document.getElementById('matchModeSelect');
+    if (matchModeSelect) {
+      matchModeSelect.value = mode;
+    }
     const allTabs = await chrome.tabs.query({});
     const groups = {};
     for (const t of allTabs) {
@@ -836,6 +853,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     refresh();
   });
   
+  document.getElementById('matchModeSelect').addEventListener('change', async () => {
+    const preferences = await loadPreferences();
+    const newMatchMode = document.getElementById('matchModeSelect').value;
+    preferences.matchMode = newMatchMode;
+    // Sync the hidden selector
+    document.getElementById('mode').value = newMatchMode;
+    await savePreferences(preferences);
+    refresh();
+  });
+  
   document.getElementById('viewMode').addEventListener('change', async () => {
     const preferences = await loadPreferences();
     preferences.viewMode = document.getElementById('viewMode').value;
@@ -867,26 +894,42 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Add consolidate all functionality
   document.getElementById('consolidateAllBtn').addEventListener('click', async () => {
   try {
-    const [currTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!currTab) return;
-    
-    const targetWin = currTab.windowId;
     const allTabs = await chrome.tabs.query({});
-    const tabsToMove = allTabs.filter(tab => 
-      tab.windowId !== targetWin && 
+    const mode = document.getElementById('mode').value;
+    
+    // Filter out special pages
+    const validTabs = allTabs.filter(tab => 
       tab.url && 
       !tab.url.startsWith('chrome://') && 
       !tab.url.startsWith('edge://')
     );
     
-    if (tabsToMove.length === 0) {
-      alert('No tabs to consolidate!');
+    // Group tabs by canonical key (same logic as duplicate detection)
+    const groups = {};
+    for (const tab of validTabs) {
+      const key = canonicalKey(tab.url, mode);
+      if (!groups[key]) {
+        groups[key] = [];
+      }
+      groups[key].push(tab);
+    }
+    
+    // Find duplicate groups and close all but the first tab in each group
+    const tabsToClose = [];
+    for (const [key, tabs] of Object.entries(groups)) {
+      if (tabs.length > 1) {
+        // Keep the first tab, close the rest
+        tabsToClose.push(...tabs.slice(1));
+      }
+    }
+    
+    if (tabsToClose.length === 0) {
+      alert('No duplicate tabs found!');
       return;
     }
     
-    const tabIds = tabsToMove.map(tab => tab.id);
-    await chrome.tabs.move(tabIds, { windowId: targetWin, index: -1 });
-    await chrome.windows.update(targetWin, { focused: true });
+    const tabIds = tabsToClose.map(tab => tab.id);
+    await chrome.tabs.remove(tabIds);
     refresh();
   } catch (error) {
     console.error('Error consolidating tabs:', error);
