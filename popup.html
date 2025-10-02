@@ -14,10 +14,10 @@
         font-size: 14px;
         margin: 0;
         padding: 0;
-        width: 450px;
-        background: white;
+        width: 900px;
+        background: #fafafa;
         color: #333;
-        min-height: 500px;
+        min-height: 600px;
       }
       
       .container {
@@ -32,21 +32,23 @@
       }
       
       .header {
-        background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-        color: white;
-        padding: 12px 16px;
+        background: #fafafa;
+        color: #1f2937;
+        padding: 32px 24px 24px 24px;
         text-align: center;
         position: relative;
+        border-bottom: 1px solid #e5e7eb;
       }
       
       .header h1 {
-        margin: 0 0 8px 0;
-        font-size: 16px;
-        font-weight: 600;
+        margin: 0 0 0 0;
+        font-size: 32px;
+        font-weight: 700;
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 6px;
+        gap: 12px;
+        color: #1f2937;
       }
       
       .header-actions {
@@ -72,14 +74,43 @@
       }
       
       .header-icon {
-        width: 20px;
-        height: 20px;
-        background: white;
-        border-radius: 4px;
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+        border-radius: 12px;
         display: flex;
         align-items: center;
         justify-content: center;
+        font-size: 28px;
+        box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+      }
+      
+      .consolidate-section {
+        padding: 0;
+        background: #f8fafc;
+        border-bottom: 1px solid #e2e8f0;
+      }
+      
+      .consolidate-btn {
+        width: 100%;
+        padding: 12px 16px;
+        background: #4f46e5;
+        color: white;
+        border: none;
+        border-radius: 0 !important;
         font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background-color 0.2s;
+        outline: none;
+      }
+      
+      .consolidate-btn:hover {
+        background: #4338ca;
+      }
+      
+      .consolidate-btn:active {
+        background: #3730a3;
       }
       
       .controls-section {
@@ -520,6 +551,7 @@
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         position: relative;
         user-select: none;
+        overflow: visible;
       }
       
       .window-square:hover {
@@ -544,10 +576,60 @@
       }
       
       .window-tab-count {
-        font-size: 16px;
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        font-size: 11px;
         font-weight: 700;
         color: white;
-        margin-top: 2px;
+        background: #ef4444;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 2px solid white;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        z-index: 10;
+      }
+      
+      .window-favicon-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        grid-template-rows: repeat(2, 1fr);
+        gap: 4px;
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: calc(100% - 16px);
+        height: calc(100% - 16px);
+        padding: 0;
+      }
+      
+      .window-favicon {
+        width: 100%;
+        height: 100%;
+        aspect-ratio: 1;
+        border-radius: 22%;
+        background: rgba(255, 255, 255, 0.95);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        color: #64748b;
+        overflow: hidden;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+      }
+      
+      .window-favicon img {
+        width: 100%;
+        height: 100%;
+        border-radius: 22%;
+        object-fit: contain;
+        padding: 2px;
       }
       
       .window-square.current .window-number {
@@ -595,6 +677,144 @@
         cursor: grabbing;
       }
       
+      /* Window Hover Popup Styles */
+      .window-popup {
+        position: absolute;
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        padding: 12px;
+        z-index: 1000;
+        min-width: 150px;
+        max-width: 225px;
+        max-height: 300px;
+        overflow-y: auto;
+        pointer-events: none;
+        opacity: 0;
+        transform: translateY(-5px);
+        transition: opacity 0.2s ease, transform 0.2s ease;
+      }
+      
+      .window-popup.visible {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+      
+      .window-popup-header {
+        font-weight: 600;
+        color: #1e293b;
+        margin-bottom: 8px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid #e2e8f0;
+        font-size: 13px;
+      }
+      
+      .window-popup-tabs {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      
+      .window-popup-tab {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 6px;
+        border-radius: 4px;
+        transition: background-color 0.2s;
+        font-size: 12px;
+      }
+      
+      .window-popup-tab:hover {
+        background: #f8fafc;
+      }
+      
+      .window-popup-tab-favicon {
+        width: 14px;
+        height: 14px;
+        flex-shrink: 0;
+        border-radius: 2px;
+        background: #e2e8f0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 8px;
+        color: #64748b;
+      }
+      
+      .window-popup-tab-favicon img {
+        width: 100%;
+        height: 100%;
+        border-radius: 2px;
+        object-fit: contain;
+      }
+      
+      .window-popup-tab-info {
+        flex: 1;
+        min-width: 0;
+      }
+      
+      .window-popup-tab-url {
+        color: #374151;
+        font-weight: 500;
+        word-break: break-all;
+        line-height: 1.3;
+      }
+      
+      .window-popup-tab-meta {
+        color: #64748b;
+        font-size: 10px;
+        margin-top: 1px;
+      }
+      
+      /* Custom Tooltip Styles */
+      .custom-tooltip {
+        position: absolute;
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        padding: 12px;
+        z-index: 1000;
+        max-width: 250px;
+        pointer-events: none;
+        opacity: 0;
+        transform: translateY(-5px);
+        transition: opacity 0.2s ease, transform 0.2s ease;
+        font-size: 13px;
+        color: #374151;
+        line-height: 1.4;
+      }
+      
+      .custom-tooltip.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+      
+      .custom-tooltip::before {
+        content: '';
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 6px solid transparent;
+        border-bottom-color: white;
+        filter: drop-shadow(0 -2px 4px rgba(0, 0, 0, 0.1));
+      }
+      
+      .custom-tooltip::after {
+        content: '';
+        position: absolute;
+        bottom: 100%;
+        left: 50%;
+        transform: translateX(-50%);
+        border: 7px solid transparent;
+        border-bottom-color: #e2e8f0;
+        margin-bottom: -1px;
+      }
+      
     </style>
   </head>
   <body>
@@ -602,11 +822,20 @@
       <div class="header">
         <h1>
           <div class="header-icon">🔗</div>
-          CleanTabs
+          Clean Tabs
         </h1>
-        <div class="header-actions">
-          <button id="consolidateAllBtn" class="btn header-btn">
-            Consolidate All to Current Window
+      </div>
+      
+      <div class="consolidate-section">
+        <div style="display: flex;">
+          <button id="consolidateAllBtn" class="btn consolidate-btn" style="flex: 1;" data-tooltip="Close all duplicate tabs, keeping only one tab per unique URL">
+            Consolidate All Tabs
+          </button>
+          <button id="consolidateSingleWindowsBtn" class="btn consolidate-btn" style="flex: 1;" data-tooltip="Close windows that contain only one tab, moving that tab to another window">
+            Consolidate Single Windows
+          </button>
+          <button id="consolidateSingleTabsBtn" class="btn consolidate-btn" style="flex: 1;" data-tooltip="Close tabs that are the only tab in their window, moving them to another window">
+            Consolidate Single Tabs
           </button>
         </div>
       </div>
@@ -628,10 +857,6 @@
             <option value="all">All tabs</option>
           </select>
         </div>
-      </div>
-      
-      <div class="description" id="description">
-        Duplicate tabs are grouped below. Click on a group to expand and see individual tabs.
       </div>
       
       <!-- Window Overview Section -->

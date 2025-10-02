@@ -116,14 +116,6 @@ function render(groups, viewMode = 'duplicates') {
   const root = document.getElementById('root');
   root.innerHTML = '';
 
-  // Update description based on view mode
-  const description = document.getElementById('description');
-  if (viewMode === 'all') {
-    description.textContent = 'All tabs are grouped below. Click on a group to expand and see individual tabs.';
-  } else {
-    description.textContent = 'Duplicate tabs are grouped below. Click on a group to expand and see individual tabs.';
-  }
-
   const keys = viewMode === 'all' 
     ? Object.keys(groups) 
     : Object.keys(groups).filter(k => groups[k].length > 1);
@@ -187,10 +179,12 @@ function render(groups, viewMode = 'duplicates') {
       favicon.textContent = example.url ? '?' : '🔧';
     }
     
-    // Create URL text element
+    // Create URL text element - show the canonical key (match mode representation)
     const urlText = document.createElement('span');
     urlText.className = 'url-text';
-    urlText.textContent = truncateUrl(example.url) || '(chrome-internal)';
+    const matchMode = document.getElementById('mode').value;
+    const canonicalUrl = canonicalKey(example.url, matchMode);
+    urlText.textContent = truncateUrl(canonicalUrl) || '(chrome-internal)';
     
     groupUrl.appendChild(favicon);
     groupUrl.appendChild(urlText);
@@ -395,6 +389,274 @@ async function getWindowData() {
   }
 }
 
+// Get tabs for a specific window
+async function getTabsForWindow(windowId) {
+  try {
+    const allTabs = await chrome.tabs.query({ windowId });
+    // Filter out special pages
+    return allTabs.filter(tab => 
+      tab.url && 
+      !tab.url.startsWith('chrome://') && 
+      !tab.url.startsWith('edge://')
+    );
+  } catch (error) {
+    console.error('Error getting tabs for window:', error);
+    return [];
+  }
+}
+
+// Generate favicon grid for a window
+async function generateFaviconGrid(windowId) {
+  try {
+    const tabs = await getTabsForWindow(windowId);
+    
+    // Group tabs by host to avoid duplicate favicons
+    const hostGroups = {};
+    tabs.forEach(tab => {
+      try {
+        const urlObj = new URL(tab.url);
+        const host = urlObj.host.toLowerCase();
+        if (!hostGroups[host]) {
+          hostGroups[host] = {
+            host: host,
+            faviconUrl: getFaviconUrl(tab.url),
+            count: 0
+          };
+        }
+        hostGroups[host].count++;
+      } catch {
+        // Handle invalid URLs
+        const fallbackHost = 'chrome-internal';
+        if (!hostGroups[fallbackHost]) {
+          hostGroups[fallbackHost] = {
+            host: fallbackHost,
+            faviconUrl: null,
+            count: 0
+          };
+        }
+        hostGroups[fallbackHost].count++;
+      }
+    });
+    
+    // Sort hosts by tab count (most tabs first) and limit to 4 favicons
+    const sortedHosts = Object.values(hostGroups)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 4);
+    
+    if (sortedHosts.length === 0) {
+      return null;
+    }
+    
+    const faviconGrid = document.createElement('div');
+    faviconGrid.className = 'window-favicon-grid';
+    
+    sortedHosts.forEach(hostGroup => {
+      const faviconElement = document.createElement('div');
+      faviconElement.className = 'window-favicon';
+      
+      // Set fallback letter as text content
+      const hostname = hostGroup.host.replace('www.', '');
+      const fallbackText = hostGroup.host === 'chrome-internal' ? '🔧' : hostname.charAt(0).toUpperCase();
+      faviconElement.textContent = fallbackText;
+      
+      if (hostGroup.faviconUrl) {
+        const faviconImg = document.createElement('img');
+        faviconImg.src = hostGroup.faviconUrl;
+        faviconImg.alt = '';
+        faviconImg.onerror = () => {
+          // Image failed to load, keep the text fallback
+          faviconImg.remove();
+        };
+        faviconImg.onload = () => {
+          // Image loaded successfully, clear the text
+          faviconElement.textContent = '';
+          faviconElement.appendChild(faviconImg);
+        };
+        // Don't append yet - will be appended on successful load
+      }
+      
+      faviconGrid.appendChild(faviconElement);
+    });
+    
+    return faviconGrid;
+  } catch (error) {
+    console.error('Error generating favicon grid:', error);
+    return null;
+  }
+}
+
+// Create and show window popup
+function showWindowPopup(windowSquare, windowId, tabCount) {
+  // Remove any existing popup
+  const existingPopup = document.querySelector('.window-popup');
+  if (existingPopup) {
+    existingPopup.remove();
+  }
+  
+  // Create popup element
+  const popup = document.createElement('div');
+  popup.className = 'window-popup';
+  popup.id = 'windowPopup';
+  
+  // Add to body
+  document.body.appendChild(popup);
+  
+  // Get tabs for this window
+  getTabsForWindow(windowId).then(tabs => {
+    // Group tabs by host
+    const hostGroups = {};
+    tabs.forEach(tab => {
+      try {
+        const urlObj = new URL(tab.url);
+        const host = urlObj.host.toLowerCase();
+        if (!hostGroups[host]) {
+          hostGroups[host] = {
+            host: host,
+            count: 0,
+            faviconUrl: getFaviconUrl(tab.url),
+            exampleUrl: tab.url
+          };
+        }
+        hostGroups[host].count++;
+      } catch {
+        // Handle invalid URLs
+        const fallbackHost = 'chrome-internal';
+        if (!hostGroups[fallbackHost]) {
+          hostGroups[fallbackHost] = {
+            host: fallbackHost,
+            count: 0,
+            faviconUrl: null,
+            exampleUrl: tab.url
+          };
+        }
+        hostGroups[fallbackHost].count++;
+      }
+    });
+    
+    
+    // Create hosts container
+    const hostsContainer = document.createElement('div');
+    hostsContainer.className = 'window-popup-tabs';
+    
+    // Sort hosts by count (descending) then by name
+    const sortedHosts = Object.values(hostGroups).sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.host.localeCompare(b.host);
+    });
+    
+    // Add each host group (limit to 5 entries)
+    const maxEntries = 5;
+    const visibleHosts = sortedHosts.slice(0, maxEntries);
+    const remainingCount = sortedHosts.length - maxEntries;
+    
+    visibleHosts.forEach(hostGroup => {
+      const hostElement = document.createElement('div');
+      hostElement.className = 'window-popup-tab';
+      
+      // Create favicon
+      const favicon = document.createElement('div');
+      favicon.className = 'window-popup-tab-favicon';
+      
+      if (hostGroup.faviconUrl) {
+        const faviconImg = document.createElement('img');
+        faviconImg.src = hostGroup.faviconUrl;
+        faviconImg.alt = '';
+        faviconImg.onerror = () => {
+          try {
+            const hostname = hostGroup.host.replace('www.', '');
+            favicon.textContent = hostname.charAt(0).toUpperCase();
+            faviconImg.remove();
+          } catch {
+            favicon.textContent = '?';
+            faviconImg.remove();
+          }
+        };
+        favicon.appendChild(faviconImg);
+      } else {
+        favicon.textContent = hostGroup.host === 'chrome-internal' ? '🔧' : '?';
+      }
+      
+      // Create host info
+      const hostInfo = document.createElement('div');
+      hostInfo.className = 'window-popup-tab-info';
+      
+      const hostUrl = document.createElement('div');
+      hostUrl.className = 'window-popup-tab-url';
+      hostUrl.textContent = hostGroup.host === 'chrome-internal' ? '(chrome-internal)' : hostGroup.host;
+      
+      const hostMeta = document.createElement('div');
+      hostMeta.className = 'window-popup-tab-meta';
+      hostMeta.textContent = `${hostGroup.count} tab${hostGroup.count !== 1 ? 's' : ''}`;
+      
+      hostInfo.appendChild(hostUrl);
+      hostInfo.appendChild(hostMeta);
+      
+      hostElement.appendChild(favicon);
+      hostElement.appendChild(hostInfo);
+      hostsContainer.appendChild(hostElement);
+    });
+    
+    // Add "And X more" text if there are additional entries
+    if (remainingCount > 0) {
+      const moreElement = document.createElement('div');
+      moreElement.className = 'window-popup-tab';
+      moreElement.style.fontStyle = 'italic';
+      moreElement.style.color = '#64748b';
+      moreElement.style.justifyContent = 'center';
+      moreElement.textContent = `And ${remainingCount} more`;
+      hostsContainer.appendChild(moreElement);
+    }
+    
+    popup.appendChild(hostsContainer);
+    
+    // Position popup
+    positionPopup(popup, windowSquare);
+    
+    // Show popup with animation
+    setTimeout(() => {
+      popup.classList.add('visible');
+    }, 10);
+  });
+}
+
+// Position popup relative to the window square
+function positionPopup(popup, windowSquare) {
+  const rect = windowSquare.getBoundingClientRect();
+  const popupRect = popup.getBoundingClientRect();
+  const containerRect = document.querySelector('.container').getBoundingClientRect();
+  
+  // Calculate position
+  let left = rect.left + (rect.width / 2) - (popupRect.width / 2);
+  let top = rect.bottom + 8;
+  
+  // Adjust if popup would go off screen
+  if (left < containerRect.left + 10) {
+    left = containerRect.left + 10;
+  }
+  if (left + popupRect.width > containerRect.right - 10) {
+    left = containerRect.right - popupRect.width - 10;
+  }
+  if (top + popupRect.height > containerRect.bottom - 10) {
+    top = rect.top - popupRect.height - 8;
+  }
+  
+  popup.style.left = `${left}px`;
+  popup.style.top = `${top}px`;
+}
+
+// Hide window popup
+function hideWindowPopup() {
+  const popup = document.querySelector('.window-popup');
+  if (popup) {
+    popup.classList.remove('visible');
+    setTimeout(() => {
+      if (popup.parentNode) {
+        popup.remove();
+      }
+    }, 200);
+  }
+}
+
 // Render window overview
 function renderWindowOverview(windows) {
   const windowGrid = document.getElementById('windowGrid');
@@ -410,9 +672,19 @@ function renderWindowOverview(windows) {
     windowSquare.className = `window-square ${window.isCurrent ? 'current' : ''}`;
     windowSquare.draggable = true;
     windowSquare.dataset.windowId = window.windowId;
-    windowSquare.innerHTML = `
-      <div class="window-tab-count">${window.tabCount}</div>
-    `;
+    
+    // Create tab count badge
+    const tabCountBadge = document.createElement('div');
+    tabCountBadge.className = 'window-tab-count';
+    tabCountBadge.textContent = window.tabCount;
+    windowSquare.appendChild(tabCountBadge);
+    
+    // Generate favicon grid asynchronously
+    generateFaviconGrid(window.windowId).then(faviconGrid => {
+      if (faviconGrid) {
+        windowSquare.appendChild(faviconGrid);
+      }
+    });
     
     // Drag and drop event handlers
     windowSquare.addEventListener('dragstart', (e) => {
@@ -477,6 +749,31 @@ function renderWindowOverview(windows) {
       }
       
       windowSquare.classList.remove('drag-over');
+    });
+    
+    // Hover event listeners for popup
+    let hoverTimeout;
+    
+    windowSquare.addEventListener('mouseenter', () => {
+      showWindowPopup(windowSquare, window.windowId, window.tabCount);
+    });
+    
+    windowSquare.addEventListener('mouseleave', () => {
+      clearTimeout(hoverTimeout);
+      hideWindowPopup();
+    });
+    
+    // Also hide popup when mouse leaves the popup itself
+    document.addEventListener('mouseenter', (e) => {
+      if (e.target.closest('.window-popup')) {
+        clearTimeout(hoverTimeout);
+      }
+    });
+    
+    document.addEventListener('mouseleave', (e) => {
+      if (e.target.closest('.window-popup')) {
+        hideWindowPopup();
+      }
     });
     
     windowSquare.onclick = async () => {
@@ -597,6 +894,105 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   });
 
+  // Add consolidate single windows functionality
+  document.getElementById('consolidateSingleWindowsBtn').addEventListener('click', async () => {
+  try {
+    const [currTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!currTab) return;
+    
+    const targetWin = currTab.windowId;
+    const allTabs = await chrome.tabs.query({});
+    
+    // Group tabs by window
+    const windowTabs = {};
+    for (const tab of allTabs) {
+      if (!windowTabs[tab.windowId]) {
+        windowTabs[tab.windowId] = [];
+      }
+      windowTabs[tab.windowId].push(tab);
+    }
+    
+    // Find single-tab windows (excluding current window and special pages)
+    const singleTabWindows = [];
+    for (const [windowId, tabs] of Object.entries(windowTabs)) {
+      if (parseInt(windowId) === targetWin) continue; // Skip current window
+      
+      const validTabs = tabs.filter(tab => 
+        tab.url && 
+        !tab.url.startsWith('chrome://') && 
+        !tab.url.startsWith('edge://')
+      );
+      
+      if (validTabs.length === 1) {
+        singleTabWindows.push(validTabs[0]);
+      }
+    }
+    
+    if (singleTabWindows.length === 0) {
+      alert('No single-tab windows found to consolidate!');
+      return;
+    }
+    
+    const tabIds = singleTabWindows.map(tab => tab.id);
+    await chrome.tabs.move(tabIds, { windowId: targetWin, index: -1 });
+    await chrome.windows.update(targetWin, { focused: true });
+    refresh();
+  } catch (error) {
+    console.error('Error consolidating single-tab windows:', error);
+    alert('Error consolidating single-tab windows. Please try again.');
+  }
+  });
+
+  // Add consolidate single tabs functionality
+  document.getElementById('consolidateSingleTabsBtn').addEventListener('click', async () => {
+  try {
+    const [currTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!currTab) return;
+    
+    const targetWin = currTab.windowId;
+    const allTabs = await chrome.tabs.query({});
+    const mode = document.getElementById('mode').value;
+    
+    // Filter out special pages
+    const validTabs = allTabs.filter(tab => 
+      tab.url && 
+      !tab.url.startsWith('chrome://') && 
+      !tab.url.startsWith('edge://')
+    );
+    
+    // Group tabs by canonical key (same logic as duplicate detection)
+    const groups = {};
+    for (const tab of validTabs) {
+      const key = canonicalKey(tab.url, mode);
+      if (!groups[key]) {
+        groups[key] = [];
+      }
+      groups[key].push(tab);
+    }
+    
+    // Find tabs that are the only instance of their canonical key (excluding tabs in current window)
+    const singleTabs = [];
+    for (const [key, tabs] of Object.entries(groups)) {
+      if (tabs.length === 1 && tabs[0].windowId !== targetWin) {
+        singleTabs.push(tabs[0]);
+      }
+    }
+    
+    if (singleTabs.length === 0) {
+      alert('No unique tabs found to consolidate!');
+      return;
+    }
+    
+    const tabIds = singleTabs.map(tab => tab.id);
+    await chrome.tabs.move(tabIds, { windowId: targetWin, index: -1 });
+    await chrome.windows.update(targetWin, { focused: true });
+    refresh();
+  } catch (error) {
+    console.error('Error consolidating single tabs:', error);
+    alert('Error consolidating single tabs. Please try again.');
+  }
+  });
+
   // Initial refresh
   refresh();
 
@@ -637,4 +1033,93 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Refresh when a window is closed
     refresh();
   });
+
+  // Initialize custom tooltips for consolidate buttons
+  initializeCustomTooltips();
 });
+
+// Custom tooltip functionality
+let tooltipTimeout;
+let currentTooltip = null;
+
+function showCustomTooltip(element, text) {
+  // Remove any existing tooltip
+  hideCustomTooltip();
+  
+  // Create tooltip element
+  const tooltip = document.createElement('div');
+  tooltip.className = 'custom-tooltip';
+  tooltip.textContent = text;
+  tooltip.id = 'customTooltip';
+  
+  // Add to body
+  document.body.appendChild(tooltip);
+  currentTooltip = tooltip;
+  
+  // Position tooltip
+  const rect = element.getBoundingClientRect();
+  const tooltipRect = tooltip.getBoundingClientRect();
+  
+  // Center horizontally below the button
+  const left = rect.left + (rect.width / 2) - (tooltipRect.width / 2);
+  const top = rect.bottom + 12; // 12px gap below button
+  
+  // Ensure tooltip stays within viewport
+  const adjustedLeft = Math.max(10, Math.min(left, window.innerWidth - tooltipRect.width - 10));
+  const adjustedTop = Math.min(top, window.innerHeight - tooltipRect.height - 10);
+  
+  tooltip.style.left = `${adjustedLeft}px`;
+  tooltip.style.top = `${adjustedTop}px`;
+  
+  // Show tooltip with animation
+  setTimeout(() => {
+    if (tooltip.parentNode) {
+      tooltip.classList.add('visible');
+    }
+  }, 10);
+}
+
+function hideCustomTooltip() {
+  if (currentTooltip) {
+    currentTooltip.classList.remove('visible');
+    setTimeout(() => {
+      if (currentTooltip && currentTooltip.parentNode) {
+        currentTooltip.remove();
+      }
+      currentTooltip = null;
+    }, 200);
+  }
+  if (tooltipTimeout) {
+    clearTimeout(tooltipTimeout);
+    tooltipTimeout = null;
+  }
+}
+
+function initializeCustomTooltips() {
+  // Get all buttons with data-tooltip attribute
+  const tooltipButtons = document.querySelectorAll('[data-tooltip]');
+  
+  tooltipButtons.forEach(button => {
+    const tooltipText = button.getAttribute('data-tooltip');
+    
+    button.addEventListener('mouseenter', () => {
+      tooltipTimeout = setTimeout(() => {
+        showCustomTooltip(button, tooltipText);
+      }, 500); // 500ms delay before showing
+    });
+    
+    button.addEventListener('mouseleave', () => {
+      hideCustomTooltip();
+    });
+    
+    button.addEventListener('focus', () => {
+      tooltipTimeout = setTimeout(() => {
+        showCustomTooltip(button, tooltipText);
+      }, 500);
+    });
+    
+    button.addEventListener('blur', () => {
+      hideCustomTooltip();
+    });
+  });
+}
