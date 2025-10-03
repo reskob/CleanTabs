@@ -214,7 +214,7 @@ function canonicalKey(u, mode) {
   }
 }
 
-function render(groups, viewMode = 'duplicates') {
+function render(groups, viewMode = 'duplicates', searchTerm = '') {
   const root = document.getElementById('root');
   root.innerHTML = '';
 
@@ -236,6 +236,9 @@ function render(groups, viewMode = 'duplicates') {
   }
 
   keys.sort((a, b) => groups[b].length - groups[a].length);
+  
+  // Normalize search term for case-insensitive matching
+  const normalizedSearchTerm = searchTerm.toLowerCase().trim();
 
   for (const key of keys) {
     const tabs = groups[key];
@@ -371,10 +374,28 @@ function render(groups, viewMode = 'duplicates') {
     const groupContent = document.createElement('div');
     groupContent.className = 'group-content';
     
+    // Track if any tabs match the search term
+    let hasMatchingTabs = false;
+    
     // Individual tabs
     for (const t of tabs) {
+      // Check if tab matches search term
+      const tabMatchesSearch = !normalizedSearchTerm || 
+        (t.title && t.title.toLowerCase().includes(normalizedSearchTerm)) ||
+        (t.url && t.url.toLowerCase().includes(normalizedSearchTerm));
+      
+      // Track if any tab in this group matches
+      if (tabMatchesSearch) {
+        hasMatchingTabs = true;
+      }
+      
       const tabItem = document.createElement('div');
       tabItem.className = 'tab-item';
+      
+      // Hide tab item if it doesn't match search
+      if (!tabMatchesSearch) {
+        tabItem.classList.add('hidden');
+      }
 
       const tabInfo = document.createElement('div');
       tabInfo.className = 'tab-info';
@@ -459,6 +480,12 @@ function render(groups, viewMode = 'duplicates') {
 
     group.appendChild(groupHeader);
     group.appendChild(groupContent);
+    
+    // Hide entire group if no tabs match the search
+    if (!hasMatchingTabs) {
+      group.classList.add('hidden');
+    }
+    
     root.appendChild(group);
   }
 }
@@ -775,7 +802,7 @@ function hideWindowPopup() {
 }
 
 // Render window overview
-function renderWindowOverview(windows) {
+async function renderWindowOverview(windows, searchTerm = '') {
   const windowGrid = document.getElementById('windowGrid');
   const windowCountBadge = document.getElementById('windowCountBadge');
   windowGrid.innerHTML = '';
@@ -788,11 +815,32 @@ function renderWindowOverview(windows) {
     return;
   }
   
+  // Normalize search term
+  const normalizedSearchTerm = searchTerm.toLowerCase().trim();
+  
+  // If there's a search term, determine which windows have matching tabs
+  const windowHasMatch = new Map();
+  if (normalizedSearchTerm) {
+    for (const window of windows) {
+      const tabs = await getTabsForWindow(window.windowId);
+      const hasMatch = tabs.some(tab => 
+        (tab.title && tab.title.toLowerCase().includes(normalizedSearchTerm)) ||
+        (tab.url && tab.url.toLowerCase().includes(normalizedSearchTerm))
+      );
+      windowHasMatch.set(window.windowId, hasMatch);
+    }
+  }
+  
   for (const window of windows) {
     const windowSquare = document.createElement('div');
     windowSquare.className = `window-square ${window.isCurrent ? 'current' : ''}`;
     windowSquare.draggable = true;
     windowSquare.dataset.windowId = window.windowId;
+    
+    // Gray out window if it doesn't have matching tabs
+    if (normalizedSearchTerm && !windowHasMatch.get(window.windowId)) {
+      windowSquare.classList.add('grayed-out');
+    }
     
     // Create tab count badge
     const tabCountBadge = document.createElement('div');
@@ -904,6 +952,8 @@ async function refresh() {
   try {
     const mode = document.getElementById('mode').value;
     const viewMode = document.getElementById('viewMode').value;
+    const searchInput = document.getElementById('searchInput');
+    const searchTerm = searchInput ? searchInput.value : '';
     
     // Sync the visible match mode selector with the hidden one
     const matchModeSelect = document.getElementById('matchModeSelect');
@@ -921,9 +971,9 @@ async function refresh() {
     
     // Render window overview
     const windows = await getWindowData();
-    renderWindowOverview(windows);
+    await renderWindowOverview(windows, searchTerm);
     
-    render(groups, viewMode);
+    render(groups, viewMode, searchTerm);
   } catch (error) {
     console.error('Error in refresh:', error);
     // Show error in the root element
@@ -1144,6 +1194,41 @@ document.addEventListener('DOMContentLoaded', async () => {
     alert('Error consolidating single tabs. Please try again.');
   }
   });
+
+  // Initialize search functionality
+  const searchInput = document.getElementById('searchInput');
+  const clearSearchBtn = document.getElementById('clearSearchBtn');
+  
+  if (searchInput && clearSearchBtn) {
+    // Handle search input changes
+    searchInput.addEventListener('input', () => {
+      const searchTerm = searchInput.value.trim();
+      
+      // Show/hide clear button
+      if (searchTerm) {
+        clearSearchBtn.style.display = 'flex';
+      } else {
+        clearSearchBtn.style.display = 'none';
+      }
+      
+      // Refresh with search filter
+      refresh();
+    });
+    
+    // Handle clear button click
+    clearSearchBtn.addEventListener('click', () => {
+      searchInput.value = '';
+      clearSearchBtn.style.display = 'none';
+      refresh();
+    });
+    
+    // Handle Enter key in search
+    searchInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        refresh();
+      }
+    });
+  }
 
   // Initial refresh
   refresh();

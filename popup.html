@@ -1113,6 +1113,83 @@
         text-decoration: underline;
       }
       
+      /* Search Section Styles */
+      .search-section {
+        background: var(--color-background);
+        border-bottom: 1px solid var(--color-border);
+        padding: var(--spacing-lg) 16px;
+      }
+      
+      .search-container {
+        position: relative;
+        display: flex;
+        align-items: center;
+      }
+      
+      .search-input {
+        width: 100%;
+        padding: var(--spacing-md) var(--spacing-lg);
+        padding-right: var(--spacing-4xl);
+        border: 1px solid var(--color-border-light);
+        border-radius: var(--radius-lg);
+        background: var(--color-background-white);
+        font-size: var(--font-size-base);
+        color: var(--color-text-secondary);
+        outline: none;
+        transition: all 0.2s;
+      }
+      
+      .search-input:focus {
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+      }
+      
+      .search-input::placeholder {
+        color: var(--color-text-light);
+      }
+      
+      .clear-search-btn {
+        position: absolute;
+        right: var(--spacing-md);
+        background: var(--color-background-lighter);
+        border: none;
+        border-radius: 50%;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: var(--font-size-xs);
+        color: var(--color-text-muted);
+        transition: all 0.2s;
+      }
+      
+      .clear-search-btn:hover {
+        background: var(--color-border-light);
+        color: var(--color-text-secondary);
+      }
+      
+      /* Grayed out window styles */
+      .window-square.grayed-out {
+        opacity: 0.3;
+        filter: grayscale(80%);
+      }
+      
+      .window-square.grayed-out:hover {
+        opacity: 0.5;
+      }
+      
+      /* Hidden tab items */
+      .tab-item.hidden {
+        display: none;
+      }
+      
+      /* Hidden groups */
+      .group.hidden {
+        display: none;
+      }
+      
     </style>
   </head>
   <body>
@@ -1177,6 +1254,14 @@
         <option value="host+path+qs">Host + path + query</option>
         <option value="host+path-no-www">Host + path (strip www)</option>
       </select>
+      
+      <!-- Search Section -->
+      <div class="search-section">
+        <div class="search-container">
+          <input type="text" id="searchInput" class="search-input" placeholder="Search tabs by title or URL...">
+          <button id="clearSearchBtn" class="clear-search-btn" style="display: none;">✕</button>
+        </div>
+      </div>
       
       <!-- Window Overview Section -->
       <div class="window-overview-section expanded" id="windowOverviewSection">
