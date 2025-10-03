@@ -337,9 +337,56 @@ function render(groups, viewMode = 'duplicates', searchTerm = '') {
       const [currTab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!currTab) return;
       const targetWin = currTab.windowId;
-      const ids = tabs.filter(x => x.windowId !== targetWin).map(x => x.id);
-      if (ids.length) {
-        await chrome.tabs.move(ids, { windowId: targetWin, index: -1 });
+      
+      // Move tabs to current window
+      const tabsToMove = tabs.filter(x => x.windowId !== targetWin);
+      if (tabsToMove.length > 0) {
+        const movedTabIds = tabsToMove.map(x => x.id);
+        await chrome.tabs.move(movedTabIds, { windowId: targetWin, index: -1 });
+        
+        // Group all these tabs by host in the current window
+        const hostGroups = {};
+        for (const tab of tabs) {
+          try {
+            const urlObj = new URL(tab.url);
+            const host = urlObj.host.toLowerCase();
+            if (!hostGroups[host]) {
+              hostGroups[host] = [];
+            }
+            // Get the updated tab after move
+            const updatedTab = await chrome.tabs.get(tab.id);
+            hostGroups[host].push(updatedTab.id);
+          } catch {
+            // Skip invalid URLs
+          }
+        }
+        
+        // Create tab groups for each host
+        const colors = ['blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'];
+        let colorIndex = 0;
+        
+        for (const [host, tabIds] of Object.entries(hostGroups)) {
+          if (tabIds.length >= 2) {
+            const groupId = await chrome.tabs.group({ tabIds: tabIds });
+            
+            // Clean up host name for group title
+            let groupTitle = host;
+            if (groupTitle.startsWith('www.')) {
+              groupTitle = groupTitle.substring(4);
+            }
+            if (groupTitle.endsWith('.com')) {
+              groupTitle = groupTitle.substring(0, groupTitle.length - 4);
+            }
+            
+            await chrome.tabGroups.update(groupId, {
+              title: groupTitle,
+              color: colors[colorIndex % colors.length],
+              collapsed: false
+            });
+            colorIndex++;
+          }
+        }
+        
         // Track successful action for review prompting
         await trackSuccessfulAction();
       }
@@ -1041,8 +1088,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Add consolidate all functionality
   document.getElementById('consolidateAllBtn').addEventListener('click', async () => {
   try {
+    const [currTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!currTab) return;
+    
+    const targetWin = currTab.windowId;
     const allTabs = await chrome.tabs.query({});
-    const mode = document.getElementById('mode').value;
     
     // Filter out special pages
     const validTabs = allTabs.filter(tab => 
@@ -1051,32 +1101,67 @@ document.addEventListener('DOMContentLoaded', async () => {
       !tab.url.startsWith('edge://')
     );
     
-    // Group tabs by canonical key (same logic as duplicate detection)
-    const groups = {};
-    for (const tab of validTabs) {
-      const key = canonicalKey(tab.url, mode);
-      if (!groups[key]) {
-        groups[key] = [];
-      }
-      groups[key].push(tab);
-    }
+    // Move all tabs from other windows to current window
+    const tabsToMove = validTabs.filter(tab => tab.windowId !== targetWin);
     
-    // Find duplicate groups and close all but the first tab in each group
-    const tabsToClose = [];
-    for (const [key, tabs] of Object.entries(groups)) {
-      if (tabs.length > 1) {
-        // Keep the first tab, close the rest
-        tabsToClose.push(...tabs.slice(1));
-      }
-    }
-    
-    if (tabsToClose.length === 0) {
-      alert('No duplicate tabs found!');
+    if (tabsToMove.length === 0) {
+      alert('All tabs are already in the current window!');
       return;
     }
     
-    const tabIds = tabsToClose.map(tab => tab.id);
-    await chrome.tabs.remove(tabIds);
+    const tabIdsToMove = tabsToMove.map(tab => tab.id);
+    await chrome.tabs.move(tabIdsToMove, { windowId: targetWin, index: -1 });
+    
+    // Group all tabs in the current window by host
+    const allTabsInWindow = await chrome.tabs.query({ windowId: targetWin });
+    const validTabsInWindow = allTabsInWindow.filter(tab => 
+      tab.url && 
+      !tab.url.startsWith('chrome://') && 
+      !tab.url.startsWith('edge://')
+    );
+    
+    // Group tabs by host
+    const hostGroups = {};
+    for (const tab of validTabsInWindow) {
+      try {
+        const urlObj = new URL(tab.url);
+        const host = urlObj.host.toLowerCase();
+        if (!hostGroups[host]) {
+          hostGroups[host] = [];
+        }
+        hostGroups[host].push(tab.id);
+      } catch {
+        // Skip invalid URLs
+      }
+    }
+    
+    // Create tab groups for each host
+    const colors = ['blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'];
+    let colorIndex = 0;
+    
+    for (const [host, tabIds] of Object.entries(hostGroups)) {
+      if (tabIds.length >= 2) {
+        const groupId = await chrome.tabs.group({ tabIds: tabIds });
+        
+        // Clean up host name for group title
+        let groupTitle = host;
+        if (groupTitle.startsWith('www.')) {
+          groupTitle = groupTitle.substring(4);
+        }
+        if (groupTitle.endsWith('.com')) {
+          groupTitle = groupTitle.substring(0, groupTitle.length - 4);
+        }
+        
+        await chrome.tabGroups.update(groupId, {
+          title: groupTitle,
+          color: colors[colorIndex % colors.length],
+          collapsed: false
+        });
+        colorIndex++;
+      }
+    }
+    
+    await chrome.windows.update(targetWin, { focused: true });
     
     // Track successful action for review prompting
     await trackSuccessfulAction();

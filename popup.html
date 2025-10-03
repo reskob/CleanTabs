@@ -167,6 +167,13 @@
         transform: translateY(0);
       }
       
+      .version-string {
+        font-size: var(--font-size-xs);
+        color: var(--color-text-light);
+        font-weight: 500;
+        user-select: text;
+      }
+      
       .header h1 {
         margin: 0 0 0 0;
         font-size: var(--font-size-2xl);
@@ -1205,9 +1212,12 @@
           <button id="reviewBtn" class="review-btn">
             ⭐
           </button>
-          <a href="https://ko-fi.com/reskob" target="_blank" class="kofi-link">
-            ☕ Ko-fi
-          </a>
+          <div style="display: flex; flex-direction: column; gap: var(--spacing-xs); align-items: flex-end;">
+            <a href="https://ko-fi.com/reskob" target="_blank" class="kofi-link">
+              ☕ Ko-fi
+            </a>
+            <div class="version-string">v1.0.0</div>
+          </div>
         </div>
       </div>
       
