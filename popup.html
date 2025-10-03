@@ -107,6 +107,66 @@
         border-bottom: 1px solid var(--color-border);
       }
       
+      .review-btn {
+        background: none;
+        border: none;
+        font-size: 18px;
+        cursor: pointer;
+        padding: var(--spacing-xs);
+        border-radius: var(--radius-sm);
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        animation: pulseScale 0.5s ease-in-out infinite;
+      }
+
+      .review-btn:hover {
+        background: rgba(251, 191, 36, 0.1);
+      }
+
+      .review-btn:active {
+        transform: scale(0.9);
+      }
+
+      @keyframes pulseScale {
+        0%, 100% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.1);
+        }
+      }
+
+      .kofi-link {
+        background: #ff5e5b;
+        color: white;
+        text-decoration: none;
+        padding: var(--spacing-sm) var(--spacing-md);
+        border-radius: var(--radius-md);
+        font-size: var(--font-size-sm);
+        font-weight: 600;
+        transition: all 0.2s;
+        box-shadow: 0 2px 4px rgba(255, 94, 91, 0.3);
+        display: flex;
+        align-items: center;
+        gap: var(--spacing-xs);
+      }
+      
+      .kofi-link:hover {
+        background: #ff4441;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(255, 94, 91, 0.4);
+        text-decoration: none;
+        color: white;
+      }
+      
+      .kofi-link:active {
+        transform: translateY(0);
+      }
+      
       .header h1 {
         margin: 0 0 0 0;
         font-size: var(--font-size-2xl);
@@ -119,9 +179,12 @@
       }
       
       .header-actions {
+        position: absolute;
+        top: var(--spacing-lg);
+        right: var(--spacing-lg);
         display: flex;
-        justify-content: center;
-        margin-top: var(--spacing-xs);
+        align-items: center;
+        gap: var(--spacing-xs);
       }
       
       .header-btn {
@@ -918,6 +981,138 @@
         margin-bottom: -1px;
       }
       
+      /* Review Popup Styles */
+      .review-popup {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        animation: fadeIn 0.3s ease-out;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      .review-popup-content {
+        background: var(--color-background-white);
+        border-radius: var(--radius-xl);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        padding: var(--spacing-3xl);
+        max-width: 400px;
+        width: 90%;
+        animation: slideUp 0.3s ease-out;
+        display: flex;
+        flex-direction: column;
+      }
+
+      @keyframes slideUp {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .review-popup-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: var(--spacing-2xl);
+      }
+
+      .review-popup-header h3 {
+        margin: 0;
+        font-size: var(--font-size-xl);
+        font-weight: 600;
+        color: var(--color-text-primary);
+        text-align: center;
+        flex: 1;
+      }
+
+      .review-popup-close {
+        background: none;
+        border: none;
+        font-size: var(--font-size-lg);
+        color: var(--color-text-muted);
+        cursor: pointer;
+        padding: var(--spacing-xs);
+        border-radius: var(--radius-sm);
+        transition: all 0.2s;
+        margin-left: var(--spacing-lg);
+      }
+
+      .review-popup-close:hover {
+        background: var(--color-background-light);
+        color: var(--color-text-secondary);
+      }
+
+      .review-popup-stars {
+        display: flex;
+        justify-content: center;
+        gap: var(--spacing-md);
+      }
+
+      .star-btn {
+        background: none;
+        border: none;
+        font-size: 32px;
+        cursor: pointer;
+        padding: var(--spacing-sm);
+        border-radius: var(--radius-md);
+        transition: all 0.2s;
+        filter: grayscale(100%);
+      }
+
+      .star-btn:hover {
+        transform: scale(1.1);
+        filter: grayscale(0%);
+      }
+
+      .star-btn.active {
+        filter: grayscale(0%);
+        transform: scale(1.1);
+      }
+
+      /* Hover effect: when hovering over a star, highlight all stars to the left */
+      .star-btn.hover-highlight {
+        filter: grayscale(0%);
+        transform: scale(1.1);
+      }
+
+      .review-popup-footer {
+        text-align: center;
+        padding: var(--spacing-4xl) 0 0 0;
+        margin-top: auto;
+      }
+
+      .never-show-again-link {
+        color: var(--color-text-muted);
+        text-decoration: none;
+        font-size: var(--font-size-sm);
+        transition: color 0.2s;
+        display: inline-block;
+      }
+
+      .never-show-again-link:hover {
+        color: var(--color-text-secondary);
+        text-decoration: underline;
+      }
+      
     </style>
   </head>
   <body>
@@ -929,6 +1124,14 @@
           </div>
           Clean Tabs
         </h1>
+        <div class="header-actions">
+          <button id="reviewBtn" class="review-btn">
+            ⭐
+          </button>
+          <a href="https://ko-fi.com/reskob" target="_blank" class="kofi-link">
+            ☕ Ko-fi
+          </a>
+        </div>
       </div>
       
       <div class="consolidate-section">
@@ -936,13 +1139,13 @@
           <h3 style="margin: 0; font-size: var(--font-size-lg); font-weight: 600; color: var(--color-text-secondary);">Consolidate</h3>
         </div>
         <div style="display: flex; gap: var(--spacing-md);">
-          <button id="consolidateAllBtn" class="consolidate-btn" style="flex: 1;" data-tooltip="Close all duplicate tabs, keeping only one tab per unique URL">
+          <button id="consolidateAllBtn" class="consolidate-btn" style="flex: 1;" data-tooltip="Consolidate all of the tabs to this window">
             All Tabs
           </button>
-          <button id="consolidateSingleWindowsBtn" class="consolidate-btn" style="flex: 1;" data-tooltip="Close windows that contain only one tab, moving that tab to another window">
+          <button id="consolidateSingleWindowsBtn" class="consolidate-btn" style="flex: 1;" data-tooltip="Consolidate all of the single tab windows to this window">
             Single Windows
           </button>
-          <button id="consolidateSingleTabsBtn" class="consolidate-btn" style="flex: 1;" data-tooltip="Close tabs that are the only tab in their window, moving them to another window">
+          <button id="consolidateSingleTabsBtn" class="consolidate-btn" style="flex: 1;" data-tooltip="Consolidate every single tab from every window to this window">
             Single Tabs
           </button>
         </div>
@@ -991,6 +1194,26 @@
         </div>
       </div>
       
+      <!-- Review Popup -->
+      <div id="reviewPopup" class="review-popup" style="display: none;">
+        <div class="review-popup-content">
+          <div class="review-popup-header">
+            <h3>Love Clean Tabs? Leave me a review!</h3>
+            <button id="reviewPopupClose" class="review-popup-close">✕</button>
+          </div>
+          <div class="review-popup-stars">
+            <button class="star-btn" data-rating="1">⭐</button>
+            <button class="star-btn" data-rating="2">⭐</button>
+            <button class="star-btn" data-rating="3">⭐</button>
+            <button class="star-btn" data-rating="4">⭐</button>
+            <button class="star-btn" data-rating="5">⭐</button>
+          </div>
+          <div class="review-popup-footer">
+            <a href="#" id="neverShowAgainLink" class="never-show-again-link">Never show again</a>
+          </div>
+        </div>
+      </div>
+
       <div class="content" id="root">
         <div class="loading">
           <div class="spinner"></div>

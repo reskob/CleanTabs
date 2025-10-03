@@ -25,6 +25,91 @@ async function loadPreferences() {
   }
 }
 
+// Review tracking functions
+async function saveReviewData(reviewData) {
+  try {
+    await chrome.storage.local.set({ reviewData });
+  } catch (error) {
+    console.error('Error saving review data:', error);
+  }
+}
+
+async function loadReviewData() {
+  try {
+    const result = await chrome.storage.local.get(['reviewData']);
+    return result.reviewData || {
+      successfulActions: 0,
+      lastReviewPrompt: null,
+      reviewDismissed: false,
+      reviewGiven: false,
+      reviewDisabled: false
+    };
+  } catch (error) {
+    console.error('Error loading review data:', error);
+    return {
+      successfulActions: 0,
+      lastReviewPrompt: null,
+      reviewDismissed: false,
+      reviewGiven: false,
+      reviewDisabled: false
+    };
+  }
+}
+
+// Track successful actions (tab consolidations)
+async function trackSuccessfulAction() {
+  const reviewData = await loadReviewData();
+  reviewData.successfulActions += 1;
+  await saveReviewData(reviewData);
+  
+  // Show review prompt after 5 successful actions and if not already dismissed/given/disabled
+  if (reviewData.successfulActions >= 5 && !reviewData.reviewDismissed && !reviewData.reviewGiven && !reviewData.reviewDisabled) {
+    const daysSinceLastPrompt = reviewData.lastReviewPrompt 
+      ? (Date.now() - reviewData.lastReviewPrompt) / (1000 * 60 * 60 * 24)
+      : 999;
+    
+    // Only show prompt if it's been at least 7 days since last prompt
+    if (daysSinceLastPrompt >= 7) {
+      showReviewPopup();
+      reviewData.lastReviewPrompt = Date.now();
+      await saveReviewData(reviewData);
+    }
+  }
+}
+
+// Show the review popup
+function showReviewPopup() {
+  const popup = document.getElementById('reviewPopup');
+  if (popup) {
+    popup.style.display = 'flex';
+  }
+}
+
+// Hide the review popup
+function hideReviewPopup() {
+  const popup = document.getElementById('reviewPopup');
+  if (popup) {
+    popup.style.display = 'none';
+  }
+}
+
+// Open Chrome Web Store review page
+async function openReviewPage() {
+  // Get the extension ID
+  const extensionId = chrome.runtime.id;
+  const reviewUrl = `https://chrome.google.com/webstore/detail/${extensionId}/reviews`;
+  
+  // Open in new tab
+  await chrome.tabs.create({ url: reviewUrl });
+  
+  // Mark review as given
+  const reviewData = await loadReviewData();
+  reviewData.reviewGiven = true;
+  await saveReviewData(reviewData);
+  
+  hideReviewPopup();
+}
+
 async function applyPreferences(preferences) {
   // Apply match mode
   const modeSelect = document.getElementById('mode');
@@ -233,7 +318,11 @@ function render(groups, viewMode = 'duplicates') {
       e.stopPropagation(); // Prevent group toggle
       const survivors = tabs[0].id;
       const victims = tabs.slice(1).map(x => x.id);
-      if (victims.length) await chrome.tabs.remove(victims);
+      if (victims.length) {
+        await chrome.tabs.remove(victims);
+        // Track successful action for review prompting
+        await trackSuccessfulAction();
+      }
       refresh();
     };
 
@@ -246,7 +335,11 @@ function render(groups, viewMode = 'duplicates') {
       if (!currTab) return;
       const targetWin = currTab.windowId;
       const ids = tabs.filter(x => x.windowId !== targetWin).map(x => x.id);
-      if (ids.length) await chrome.tabs.move(ids, { windowId: targetWin, index: -1 });
+      if (ids.length) {
+        await chrome.tabs.move(ids, { windowId: targetWin, index: -1 });
+        // Track successful action for review prompting
+        await trackSuccessfulAction();
+      }
       await chrome.windows.update(targetWin, { focused: true });
       refresh();
     };
@@ -322,7 +415,11 @@ function render(groups, viewMode = 'duplicates') {
       keepOnlyThis.textContent = 'Keep only this';
       keepOnlyThis.onclick = async () => {
         const others = tabs.filter(x => x.id !== t.id).map(x => x.id);
-        if (others.length) await chrome.tabs.remove(others);
+        if (others.length) {
+          await chrome.tabs.remove(others);
+          // Track successful action for review prompting
+          await trackSuccessfulAction();
+        }
         refresh();
       };
 
@@ -332,7 +429,11 @@ function render(groups, viewMode = 'duplicates') {
       consolidateHere.onclick = async () => {
         const targetWin = t.windowId;
         const otherTabs = tabs.filter(x => x.windowId !== targetWin).map(x => x.id);
-        if (otherTabs.length) await chrome.tabs.move(otherTabs, { windowId: targetWin, index: -1 });
+        if (otherTabs.length) {
+          await chrome.tabs.move(otherTabs, { windowId: targetWin, index: -1 });
+          // Track successful action for review prompting
+          await trackSuccessfulAction();
+        }
         await chrome.windows.update(targetWin, { focused: true });
         refresh();
       };
@@ -619,6 +720,15 @@ function showWindowPopup(windowSquare, windowId, tabCount) {
     // Position popup
     positionPopup(popup, windowSquare);
     
+    // Keep popup visible when hovering over it
+    popup.addEventListener('mouseenter', () => {
+      popup.classList.add('visible');
+    });
+    
+    popup.addEventListener('mouseleave', () => {
+      hideWindowPopup();
+    });
+    
     // Show popup with animation
     setTimeout(() => {
       popup.classList.add('visible');
@@ -774,19 +884,6 @@ function renderWindowOverview(windows) {
       hideWindowPopup();
     });
     
-    // Also hide popup when mouse leaves the popup itself
-    document.addEventListener('mouseenter', (e) => {
-      if (e.target.closest('.window-popup')) {
-        clearTimeout(hoverTimeout);
-      }
-    });
-    
-    document.addEventListener('mouseleave', (e) => {
-      if (e.target.closest('.window-popup')) {
-        hideWindowPopup();
-      }
-    });
-    
     windowSquare.onclick = async () => {
       // Just refresh to update the display - don't focus the window to avoid closing popup
       refresh();
@@ -930,6 +1027,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     const tabIds = tabsToClose.map(tab => tab.id);
     await chrome.tabs.remove(tabIds);
+    
+    // Track successful action for review prompting
+    await trackSuccessfulAction();
+    
     refresh();
   } catch (error) {
     console.error('Error consolidating tabs:', error);
@@ -979,6 +1080,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const tabIds = singleTabWindows.map(tab => tab.id);
     await chrome.tabs.move(tabIds, { windowId: targetWin, index: -1 });
     await chrome.windows.update(targetWin, { focused: true });
+    
+    // Track successful action for review prompting
+    await trackSuccessfulAction();
+    
     refresh();
   } catch (error) {
     console.error('Error consolidating single-tab windows:', error);
@@ -1029,6 +1134,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const tabIds = singleTabs.map(tab => tab.id);
     await chrome.tabs.move(tabIds, { windowId: targetWin, index: -1 });
     await chrome.windows.update(targetWin, { focused: true });
+    
+    // Track successful action for review prompting
+    await trackSuccessfulAction();
+    
     refresh();
   } catch (error) {
     console.error('Error consolidating single tabs:', error);
@@ -1079,6 +1188,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Initialize custom tooltips for consolidate buttons
   initializeCustomTooltips();
+  
+  // Initialize review functionality
+  initializeReviewSystem();
 });
 
 // Custom tooltip functionality
@@ -1165,4 +1277,96 @@ function initializeCustomTooltips() {
       hideCustomTooltip();
     });
   });
+}
+
+// Initialize review system
+async function initializeReviewSystem() {
+  // Check if review is disabled and hide the review button if so
+  const reviewData = await loadReviewData();
+  const reviewBtn = document.getElementById('reviewBtn');
+  if (reviewBtn) {
+    if (reviewData.reviewDisabled) {
+      reviewBtn.style.display = 'none';
+    } else {
+      reviewBtn.addEventListener('click', showReviewPopup);
+    }
+  }
+  
+  // Review popup close button
+  const reviewPopupClose = document.getElementById('reviewPopupClose');
+  if (reviewPopupClose) {
+    reviewPopupClose.addEventListener('click', async () => {
+      const reviewData = await loadReviewData();
+      reviewData.reviewDismissed = true;
+      await saveReviewData(reviewData);
+      hideReviewPopup();
+    });
+  }
+
+  // Star buttons
+  const starButtons = document.querySelectorAll('.star-btn');
+  starButtons.forEach((starBtn, index) => {
+    starBtn.addEventListener('click', () => {
+      // Mark all stars up to clicked star as active
+      starButtons.forEach((btn, i) => {
+        if (i <= index) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+      
+      // Open review page after a short delay
+      setTimeout(() => {
+        openReviewPage();
+      }, 500);
+    });
+
+    // Add hover effect: highlight all stars to the left when hovering
+    starBtn.addEventListener('mouseenter', () => {
+      starButtons.forEach((btn, i) => {
+        if (i <= index) {
+          btn.classList.add('hover-highlight');
+        } else {
+          btn.classList.remove('hover-highlight');
+        }
+      });
+    });
+
+    starBtn.addEventListener('mouseleave', () => {
+      // Remove hover highlight from all stars
+      starButtons.forEach(btn => {
+        btn.classList.remove('hover-highlight');
+      });
+    });
+  });
+
+  // Never show again link
+  const neverShowAgainLink = document.getElementById('neverShowAgainLink');
+  if (neverShowAgainLink) {
+    neverShowAgainLink.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const reviewData = await loadReviewData();
+      reviewData.reviewDisabled = true;
+      await saveReviewData(reviewData);
+      
+      // Hide the review button in the header
+      const reviewBtn = document.getElementById('reviewBtn');
+      if (reviewBtn) {
+        reviewBtn.style.display = 'none';
+      }
+      
+      hideReviewPopup();
+    });
+  }
+
+  // Close popup when clicking outside
+  const reviewPopup = document.getElementById('reviewPopup');
+  if (reviewPopup) {
+    reviewPopup.addEventListener('click', (e) => {
+      if (e.target === reviewPopup) {
+        hideReviewPopup();
+      }
+    });
+  }
 }
